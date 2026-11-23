@@ -15,7 +15,16 @@ CCFLAGS = -fno-builtin
 CXXFLAGS = -std=c++14 -pipe -Wall -Wextra -fno-builtin -fno-rtti
 DFLAGS =
 OFLAGS = -O3 -flto
-LFLAGS = -L. -L/usr/local/lib/ -Lbncsutil/src/bncsutil/ -lstorm -lbncsutil -lgmp -lbz2 -lz
+# war3plat: prefer the in-tree dependency builds from `make deps` (no `sudo make install` needed);
+# fall back to a system-wide StormLib (`-lstorm`) as upstream does. The rpath lets aura++ find the
+# in-tree .so files from any working directory without LD_LIBRARY_PATH.
+ifneq ($(wildcard StormLib/libStorm.so),)
+  STORM_LFLAGS = -LStormLib -lStorm
+else
+  STORM_LFLAGS = -lstorm
+endif
+LFLAGS = -L. -L/usr/local/lib/ -Lbncsutil/src/bncsutil/ $(STORM_LFLAGS) -lbncsutil -lgmp -lbz2 -lz \
+         -Wl,-rpath,'$$ORIGIN/StormLib:$$ORIGIN/bncsutil/src/bncsutil'
 
 ifeq ($(ARCH),x86_64)
 	CCFLAGS += -m64
@@ -76,6 +85,12 @@ $(PROG): $(OBJS) $(COBJS)
 	@echo "[BIN] $@ created."
 	@strip "$(PROG)"
 	@echo "[BIN] Stripping the binary."
+
+# war3plat: build StormLib and bncsutil in-tree. Run as a separate step: `make deps && make`
+# (the library detection above happens when make starts).
+deps:
+	$(MAKE) -C StormLib -f Makefile.linux libStorm.so
+	$(MAKE) -C bncsutil/src/bncsutil
 
 clean:
 	@rm -f $(OBJS) $(COBJS) $(PROG)
