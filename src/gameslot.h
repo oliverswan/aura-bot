@@ -42,6 +42,13 @@
 
 constexpr int MAX_SLOTS = 24;
 
+// war3plat: Warcraft III before 1.29 has 12 slots, 1.29+ has 24. The LAN GAMEINFO slot counts
+// must match the client version (lan_war3version), otherwise a 1.27 client mishandles the game.
+inline uint32_t LANSlotsForVersion(uint8_t war3Version)
+{
+  return war3Version >= 29 ? MAX_SLOTS : 12;
+}
+
 //
 // CGameSlot
 //
