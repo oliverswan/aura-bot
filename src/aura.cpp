@@ -139,6 +139,12 @@ int main(const int, const char* argv[])
 
   if (gAura->GetReady())
   {
+    // war3plat: lan_test_game = <name> hosts a public LAN game with the default map right away,
+    // without battle.net or IRC (debug/spike use only; empty = off)
+    const string lanGame = CFG.GetString("lan_test_game", "");
+    if (!lanGame.empty() && gAura->m_Map->GetValid())
+      gAura->CreateGame(gAura->m_Map, GAME_PUBLIC, lanGame, "LANTester", "LANTester", nullptr, false);
+
     // loop
 
     while (!gAura->Update())
@@ -328,7 +334,7 @@ CAura::CAura(CConfig* CFG)
   if (m_BNETs.empty())
     Print("[AURA] warning - no battle.net connections found in config file");
 
-  if (m_BNETs.empty() && !m_IRC)
+  if (m_BNETs.empty() && !m_IRC && CFG->GetString("lan_test_game", "").empty())
   {
     Print("[AURA] error - no battle.net connections and no irc connection specified");
     m_Ready = false;
