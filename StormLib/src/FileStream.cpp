@@ -429,6 +429,11 @@ static void BaseFile_Init(TFileStream * pStream)
     pStream->BaseGetSize = BaseFile_GetSize;
     pStream->BaseGetPos  = BaseFile_GetPos;
     pStream->BaseClose   = BaseFile_Close;
+
+    // war3plat: the stream was just zeroed by AllocateFileStream, so hFile is 0 (not
+    // INVALID_HANDLE_VALUE). If BaseFile_Open then fails (e.g. a missing map file), the cleanup
+    // path calls BaseFile_Close, which did close(0) on Linux and killed whatever socket held fd 0.
+    pStream->Base.File.hFile = INVALID_HANDLE_VALUE;
 }
 
 //-----------------------------------------------------------------------------
