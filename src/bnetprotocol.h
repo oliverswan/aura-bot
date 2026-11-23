@@ -28,6 +28,7 @@
 #define BNET_HEADER_CONSTANT 255
 
 #include <string>
+#include <cstdint>
 #include <vector>
 
 class CIncomingGameHost;
