@@ -208,6 +208,10 @@ CAura::CAura(CConfig* CFG)
 
   m_ReconnectPort = CFG->GetInt("bot_reconnectport", 6113);
 
+  // war3plat: SetConfigs() (which reads bot_bindaddress) runs later, so without this the
+  // GProxy++ reconnect port ignored bot_bindaddress and listened on all interfaces
+  m_BindAddress = CFG->GetString("bot_bindaddress", string());
+
   if (m_ReconnectSocket->Listen(m_BindAddress, m_ReconnectPort))
     Print("[AURA] listening for GProxy++ reconnects on port " + to_string(m_ReconnectPort));
   else
