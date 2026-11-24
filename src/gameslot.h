@@ -40,7 +40,10 @@
 #define SLOTCOMP_NORMAL 1
 #define SLOTCOMP_HARD 2
 
-constexpr int MAX_SLOTS = 24;
+// war3plat: this fork serves Warcraft III 1.27 only, which has 12 slots (1.29+ has 24). With 24, melee maps
+// got 20 observer slots (4 + 20 = 24) and observers on team 24, and a 1.27 client leaves such a lobby at
+// once (it never even answers MAPCHECK). Observers are team 12 on 1.27.
+constexpr int MAX_SLOTS = 12;
 
 // war3plat: Warcraft III before 1.29 has 12 slots, 1.29+ has 24. The LAN GAMEINFO slot counts
 // must match the client version (lan_war3version), otherwise a 1.27 client mishandles the game.
