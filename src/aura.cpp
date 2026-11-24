@@ -698,6 +698,7 @@ void CAura::SetConfigs(CConfig* CFG)
 
   m_MapCFGPath      = AddPathSeparator(CFG->GetString("bot_mapcfgpath", string()));
   m_MapPath         = AddPathSeparator(CFG->GetString("bot_mappath", string()));
+  m_MapPathCharset  = CFG->GetString("bot_mappathcharset", string());
   m_VirtualHostName = CFG->GetString("bot_virtualhostname", "|cFF4080C0Aura");
 
   if (m_VirtualHostName.size() > 15)

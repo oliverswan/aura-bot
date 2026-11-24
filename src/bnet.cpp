@@ -36,7 +36,56 @@
 
 #include <algorithm>
 
+#ifndef _WIN32
+#include <cerrno>
+#include <iconv.h>
+#endif
+
 using namespace std;
+
+// war3plat: Warcraft III 1.27 clients read the map path in GAMEINFO/MAPCHECK in the system ANSI codepage
+// (GBK on Chinese Windows), while file names on the server are UTF-8. Convert the client-side path so the
+// client finds its local copy (and can save a download) under the same name. Returns false if not representable.
+static bool ConvertCharset(const string& in, const string& charset, string& out)
+{
+  if (charset.empty())
+  {
+    out = in;
+    return true;
+  }
+#ifdef _WIN32
+  out = in;
+  return true;
+#else
+  iconv_t cd = iconv_open(charset.c_str(), "UTF-8");
+
+  if (cd == (iconv_t)-1)
+    return false;
+
+  string result;
+  char* src = const_cast<char*>(in.data());
+  size_t left = in.size();
+  char buf[256];
+
+  while (left > 0)
+  {
+    char* dst = buf;
+    size_t room = sizeof(buf);
+
+    if (iconv(cd, &src, &left, &dst, &room) == (size_t)-1 && errno != E2BIG)
+    {
+      iconv_close(cd);
+      return false;
+    }
+
+    result.append(buf, dst - buf);
+  }
+
+  iconv_close(cd);
+  out = result;
+  return true;
+#endif
+}
 
 //
 // CBNET
@@ -609,10 +658,18 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
                   const string File = Matches.at(0);
                   QueueChatCommand("Loading map file [" + File + "]", User, Whisper, m_IRC);
 
+                  string ClientFile;
+
+                  if (!ConvertCharset(File, m_Aura->m_MapPathCharset, ClientFile))
+                  {
+                    QueueChatCommand("Error while loading map: [map file name cannot be converted to " + m_Aura->m_MapPathCharset + "]", User, Whisper, m_IRC);
+                    return;
+                  }
+
                   // hackhack: create a config file in memory with the required information to load the map
 
                   CConfig MapCFG;
-                  MapCFG.Set("map_path", R"(Maps\Download\)" + File);
+                  MapCFG.Set("map_path", R"(Maps\Download\)" + ClientFile);
                   MapCFG.Set("map_localpath", File);
 
                   if (File.find("DotA") != string::npos)

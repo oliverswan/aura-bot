@@ -60,6 +60,7 @@ public:
   std::string              m_Version;                    // Aura++ version string
   std::string              m_MapCFGPath;                 // config value: map cfg path
   std::string              m_MapPath;                    // config value: map path
+  std::string              m_MapPathCharset;             // config value: charset of map_path sent to clients for !map (e.g. GBK for Chinese 1.27 clients), empty = as is
   std::string              m_VirtualHostName;            // config value: virtual host name
   std::string              m_LanguageFile;               // config value: language file
   std::string              m_Warcraft3Path;              // config value: Warcraft 3 path
