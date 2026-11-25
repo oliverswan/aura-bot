@@ -3503,6 +3503,79 @@ void CGame::EventPlayerChangeTeam(CGamePlayer* player, uint8_t team)
   }
 }
 
+bool CGame::AddComputer(uint32_t team, uint32_t skill, uint8_t& sid, std::string& why)
+{
+  // war3plat (ADR-0013): the platform puts a computer (skill 0 easy, 1 normal, 2 insane) into a team before
+  // the start; free teams: the first open player slot, set to that team; custom forces: an open slot of the team
+
+  if (m_CountDownStarted || m_GameLoading || m_GameLoaded)
+  {
+    why = "game is starting";
+    return false;
+  }
+
+  if (team < 1 || team > MAX_SLOTS || skill > 2)
+  {
+    why = "bad team or skill";
+    return false;
+  }
+
+  const uint8_t Team = static_cast<uint8_t>(team - 1);
+  uint8_t       SID  = 255;
+
+  if (m_Map->GetMapOptions() & MAPOPT_CUSTOMFORCES)
+  {
+    for (uint8_t i = 0; i < m_Slots.size(); ++i)
+    {
+      if (m_Slots[i].GetSlotStatus() == SLOTSTATUS_OPEN && m_Slots[i].GetTeam() == Team)
+      {
+        SID = i;
+        break;
+      }
+    }
+  }
+  else
+  {
+    const uint8_t NumPlayers = static_cast<uint8_t>(m_Map->GetMapNumPlayers());
+
+    if (Team >= NumPlayers)
+    {
+      why = "bad team or skill";
+      return false;
+    }
+
+    for (uint8_t i = 0; i < NumPlayers && i < m_Slots.size(); ++i)
+    {
+      if (m_Slots[i].GetSlotStatus() == SLOTSTATUS_OPEN)
+      {
+        SID = i;
+        break;
+      }
+    }
+  }
+
+  if (SID == 255)
+  {
+    why = "no open slot";
+    return false;
+  }
+
+  ComputerSlot(SID, static_cast<uint8_t>(skill), false);
+
+  if (!(m_Map->GetMapOptions() & MAPOPT_CUSTOMFORCES))
+  {
+    m_Slots[SID].SetTeam(Team);
+
+    if (m_Slots[SID].GetColour() == MAX_SLOTS)
+      m_Slots[SID].SetColour(GetNewColour());
+
+    SendAllSlotInfo();
+  }
+
+  sid = SID;
+  return true;
+}
+
 bool CGame::SetPlayerTeam(const std::string& name, uint32_t team, std::string& why)
 {
   // war3plat (ADR-0012): the platform decides the teams before the start, as if the player had picked
@@ -3530,6 +3603,38 @@ bool CGame::SetPlayerTeam(const std::string& name, uint32_t team, std::string& w
 
   const uint8_t Team = team == 0 ? static_cast<uint8_t>(MAX_SLOTS) : static_cast<uint8_t>(team - 1);
   uint8_t       SID  = GetSIDFromPID(Player->GetPID());
+
+  if (!(m_Map->GetMapOptions() & MAPOPT_CUSTOMFORCES) && SID < m_Slots.size())
+  {
+    // free teams: the slot number is the player number in the game, so a player must sit in one of the
+    // map's player slots, and an observer should leave them to the players and computers (war3plat ADR-0013)
+
+    const uint8_t NumPlayers = static_cast<uint8_t>(m_Map->GetMapNumPlayers());
+    const bool    WantObs    = Team == MAX_SLOTS;
+
+    if (WantObs != (SID >= NumPlayers))
+    {
+      const uint8_t From = WantObs ? NumPlayers : 0;
+      const uint8_t To   = WantObs ? static_cast<uint8_t>(m_Slots.size()) : NumPlayers;
+
+      for (uint8_t i = From; i < To && i < m_Slots.size(); ++i)
+      {
+        if (m_Slots[i].GetSlotStatus() == SLOTSTATUS_OPEN)
+        {
+          SwapSlots(SID, i);
+          break;
+        }
+      }
+
+      SID = GetSIDFromPID(Player->GetPID());
+    }
+
+    if (!WantObs && SID >= NumPlayers)
+    {
+      why = "team full or not allowed";
+      return false;
+    }
+  }
 
   if (SID < m_Slots.size() && m_Slots[SID].GetTeam() == Team)
     return true;

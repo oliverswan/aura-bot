@@ -199,6 +199,7 @@ public:
   void EventPlayerChangeTeam(CGamePlayer* player, uint8_t team);
   // war3plat: move the lobby player called name to team (1-based, 0 = observers); false + why if it did not happen
   bool SetPlayerTeam(const std::string& name, uint32_t team, std::string& why);
+  bool AddComputer(uint32_t team, uint32_t skill, uint8_t& sid, std::string& why);
   void EventPlayerChangeColour(CGamePlayer* player, uint8_t colour);
   void EventPlayerChangeRace(CGamePlayer* player, uint8_t race);
   void EventPlayerChangeHandicap(CGamePlayer* player, uint8_t handicap);

@@ -1599,6 +1599,37 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
           }
 
           //
+          // !ADDCOMP <team> <skill> (war3plat, ADR-0013: 1-based team; skill 0 easy, 1 normal, 2 insane)
+          //
+
+          case HashCode("addcomp"):
+          {
+            if (Payload.empty() || !m_Aura->m_CurrentGame)
+              break;
+
+            uint32_t     Team, Skill;
+            stringstream SS;
+            SS << Payload;
+            SS >> Team >> Skill;
+
+            if (SS.fail())
+            {
+              QueueChatCommand("Comp failed []: usage !addcomp <team> <skill>", User, Whisper, m_IRC);
+              break;
+            }
+
+            string  Why;
+            uint8_t SID = 255;
+
+            if (m_Aura->m_CurrentGame->AddComputer(Team, Skill, SID, Why))
+              QueueChatCommand("Comp [" + to_string(Team) + "] -> slot " + to_string(SID + 1), User, Whisper, m_IRC);
+            else
+              QueueChatCommand("Comp failed [" + to_string(Team) + "]: " + Why, User, Whisper, m_IRC);
+
+            break;
+          }
+
+          //
           // !SWAP (swap slots)
           //
 
