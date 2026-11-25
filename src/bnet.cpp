@@ -35,6 +35,7 @@
 #include "hash.h"
 
 #include <algorithm>
+#include <cctype>
 
 #ifndef _WIN32
 #include <cerrno>
@@ -1588,9 +1589,33 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
               break;
             }
 
+            // "x:<hex>" spells the name in hex: Warcraft cuts names at 15 bytes, which can split a UTF-8
+            // character, and such a name should not travel raw over IRC (war3plat ADR-0013)
+
+            string Lookup = Name;
+
+            if (Name.size() > 2 && Name.compare(0, 2, "x:") == 0 && Name.size() % 2 == 0)
+            {
+              Lookup.clear();
+
+              for (size_t i = 2; i + 1 < Name.size(); i += 2)
+              {
+                const int Hi = isxdigit(static_cast<unsigned char>(Name[i])) ? stoi(Name.substr(i, 1), nullptr, 16) : -1;
+                const int Lo = isxdigit(static_cast<unsigned char>(Name[i + 1])) ? stoi(Name.substr(i + 1, 1), nullptr, 16) : -1;
+
+                if (Hi < 0 || Lo < 0)
+                {
+                  Lookup = Name;
+                  break;
+                }
+
+                Lookup.push_back(static_cast<char>(Hi * 16 + Lo));
+              }
+            }
+
             string Why;
 
-            if (m_Aura->m_CurrentGame->SetPlayerTeam(Name, Team, Why))
+            if (m_Aura->m_CurrentGame->SetPlayerTeam(Lookup, Team, Why))
               QueueChatCommand("Team [" + Name + "] -> " + to_string(Team), User, Whisper, m_IRC);
             else
               QueueChatCommand("Team failed [" + Name + "]: " + Why, User, Whisper, m_IRC);
