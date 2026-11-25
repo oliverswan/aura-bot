@@ -3503,7 +3503,7 @@ void CGame::EventPlayerChangeTeam(CGamePlayer* player, uint8_t team)
   }
 }
 
-bool CGame::AddComputer(uint32_t team, uint32_t skill, uint8_t& sid, std::string& why)
+bool CGame::AddComputer(uint32_t team, uint32_t skill, uint32_t race, uint8_t& sid, std::string& why)
 {
   // war3plat (ADR-0013): the platform puts a computer (skill 0 easy, 1 normal, 2 insane) into a team before
   // the start; free teams: the first open player slot, set to that team; custom forces: an open slot of the team
@@ -3572,8 +3572,66 @@ bool CGame::AddComputer(uint32_t team, uint32_t skill, uint8_t& sid, std::string
     SendAllSlotInfo();
   }
 
+  // a race the map does not allow is not worth failing over: the computer stays, with the map's race
+  std::string RaceWhy;
+
+  if (race != 0 && !SetSlotRace(SID, race, RaceWhy))
+    Print("[GAME: " + m_GameName + "] computer in slot " + std::to_string(SID + 1) + " keeps its race: " + RaceWhy);
+
   sid = SID;
   return true;
+}
+
+bool CGame::SetSlotRace(uint8_t SID, uint32_t race, std::string& why)
+{
+  // war3plat (ADR-0014): the race picked on the platform, as if chosen in the lobby (EventPlayerChangeRace)
+
+  if (m_CountDownStarted || m_GameLoading || m_GameLoaded)
+  {
+    why = "game is starting";
+    return false;
+  }
+
+  if (race != SLOTRACE_HUMAN && race != SLOTRACE_ORC && race != SLOTRACE_NIGHTELF && race != SLOTRACE_UNDEAD && race != SLOTRACE_RANDOM)
+  {
+    why = "bad race";
+    return false;
+  }
+
+  if (SID >= m_Slots.size())
+  {
+    why = "no such slot";
+    return false;
+  }
+
+  if ((m_Map->GetMapOptions() & MAPOPT_FIXEDPLAYERSETTINGS) || (m_Map->GetMapFlags() & MAPFLAG_RANDOMRACES))
+  {
+    why = "the map decides the races";
+    return false;
+  }
+
+  if (m_Slots[SID].GetTeam() == MAX_SLOTS)
+  {
+    why = "observer";
+    return false;
+  }
+
+  m_Slots[SID].SetRace(static_cast<uint8_t>(race | SLOTRACE_SELECTABLE));
+  SendAllSlotInfo();
+  return true;
+}
+
+bool CGame::SetPlayerRace(const std::string& name, uint32_t race, std::string& why)
+{
+  CGamePlayer* Player = GetPlayerFromName(name, true);
+
+  if (!Player)
+  {
+    why = "no such player";
+    return false;
+  }
+
+  return SetSlotRace(GetSIDFromPID(Player->GetPID()), race, why);
 }
 
 bool CGame::SetPlayerTeam(const std::string& name, uint32_t team, std::string& why)

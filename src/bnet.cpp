@@ -44,6 +44,26 @@
 
 using namespace std;
 
+// war3plat (ADR-0013): "x:<hex>" spells a player name in hex. Warcraft cuts names at 15 bytes, which can
+// split a UTF-8 character, and such a name should not travel raw over IRC. Anything else is the name itself.
+static string DecodePlayerName(const string& name)
+{
+  if (name.size() <= 2 || name.compare(0, 2, "x:") != 0 || name.size() % 2 != 0)
+    return name;
+
+  string out;
+
+  for (size_t i = 2; i + 1 < name.size(); i += 2)
+  {
+    if (!isxdigit(static_cast<unsigned char>(name[i])) || !isxdigit(static_cast<unsigned char>(name[i + 1])))
+      return name;
+
+    out.push_back(static_cast<char>(stoi(name.substr(i, 2), nullptr, 16)));
+  }
+
+  return out;
+}
+
 // war3plat: Warcraft III 1.27 clients read the map path in GAMEINFO/MAPCHECK in the system ANSI codepage
 // (GBK on Chinese Windows), while file names on the server are UTF-8. Convert the client-side path so the
 // client finds its local copy (and can save a download) under the same name. Returns false if not representable.
@@ -1589,29 +1609,7 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
               break;
             }
 
-            // "x:<hex>" spells the name in hex: Warcraft cuts names at 15 bytes, which can split a UTF-8
-            // character, and such a name should not travel raw over IRC (war3plat ADR-0013)
-
-            string Lookup = Name;
-
-            if (Name.size() > 2 && Name.compare(0, 2, "x:") == 0 && Name.size() % 2 == 0)
-            {
-              Lookup.clear();
-
-              for (size_t i = 2; i + 1 < Name.size(); i += 2)
-              {
-                const int Hi = isxdigit(static_cast<unsigned char>(Name[i])) ? stoi(Name.substr(i, 1), nullptr, 16) : -1;
-                const int Lo = isxdigit(static_cast<unsigned char>(Name[i + 1])) ? stoi(Name.substr(i + 1, 1), nullptr, 16) : -1;
-
-                if (Hi < 0 || Lo < 0)
-                {
-                  Lookup = Name;
-                  break;
-                }
-
-                Lookup.push_back(static_cast<char>(Hi * 16 + Lo));
-              }
-            }
+            const string Lookup = DecodePlayerName(Name);
 
             string Why;
 
@@ -1624,7 +1622,44 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
           }
 
           //
-          // !ADDCOMP <team> <skill> (war3plat, ADR-0013: 1-based team; skill 0 easy, 1 normal, 2 insane)
+          // !RACE <race> <name> (war3plat, ADR-0014: Warcraft race bits 1 human, 2 orc, 4 night elf, 8 undead, 32 random)
+          //
+
+          case HashCode("race"):
+          {
+            if (Payload.empty() || !m_Aura->m_CurrentGame)
+              break;
+
+            uint32_t     Race;
+            stringstream SS;
+            SS << Payload;
+            SS >> Race;
+            string Name;
+
+            if (!SS.fail())
+            {
+              getline(SS, Name);
+              Name.erase(0, min(Name.find_first_not_of(' '), Name.size()));
+            }
+
+            if (SS.fail() || Name.empty())
+            {
+              QueueChatCommand("Race failed []: usage !race <race> <name>", User, Whisper, m_IRC);
+              break;
+            }
+
+            string Why;
+
+            if (m_Aura->m_CurrentGame->SetPlayerRace(DecodePlayerName(Name), Race, Why))
+              QueueChatCommand("Race [" + Name + "] -> " + to_string(Race), User, Whisper, m_IRC);
+            else
+              QueueChatCommand("Race failed [" + Name + "]: " + Why, User, Whisper, m_IRC);
+
+            break;
+          }
+
+          //
+          // !ADDCOMP <team> <skill> [race] (war3plat, ADR-0013/0014: 1-based team; skill 0 easy, 1 normal, 2 insane; race as in !race)
           //
 
           case HashCode("addcomp"):
@@ -1632,21 +1667,24 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
             if (Payload.empty() || !m_Aura->m_CurrentGame)
               break;
 
-            uint32_t     Team, Skill;
+            uint32_t     Team, Skill, Race = 0;
             stringstream SS;
             SS << Payload;
             SS >> Team >> Skill;
 
+            if (!SS.fail() && !SS.eof())
+              SS >> Race;
+
             if (SS.fail())
             {
-              QueueChatCommand("Comp failed []: usage !addcomp <team> <skill>", User, Whisper, m_IRC);
+              QueueChatCommand("Comp failed []: usage !addcomp <team> <skill> [race]", User, Whisper, m_IRC);
               break;
             }
 
             string  Why;
             uint8_t SID = 255;
 
-            if (m_Aura->m_CurrentGame->AddComputer(Team, Skill, SID, Why))
+            if (m_Aura->m_CurrentGame->AddComputer(Team, Skill, Race, SID, Why))
               QueueChatCommand("Comp [" + to_string(Team) + "] -> slot " + to_string(SID + 1), User, Whisper, m_IRC);
             else
               QueueChatCommand("Comp failed [" + to_string(Team) + "]: " + Why, User, Whisper, m_IRC);
