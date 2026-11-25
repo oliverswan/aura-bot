@@ -3503,6 +3503,47 @@ void CGame::EventPlayerChangeTeam(CGamePlayer* player, uint8_t team)
   }
 }
 
+bool CGame::SetPlayerTeam(const std::string& name, uint32_t team, std::string& why)
+{
+  // war3plat (ADR-0012): the platform decides the teams before the start, as if the player had picked
+  // the team in the lobby (free teams: the team number changes; custom forces: moves to a free slot of it)
+
+  if (m_CountDownStarted || m_GameLoading || m_GameLoaded)
+  {
+    why = "game is starting";
+    return false;
+  }
+
+  CGamePlayer* Player = GetPlayerFromName(name, true);
+
+  if (!Player)
+  {
+    why = "no such player";
+    return false;
+  }
+
+  if (team > 12)
+  {
+    why = "bad team";
+    return false;
+  }
+
+  const uint8_t Team = team == 0 ? static_cast<uint8_t>(MAX_SLOTS) : static_cast<uint8_t>(team - 1);
+  uint8_t       SID  = GetSIDFromPID(Player->GetPID());
+
+  if (SID < m_Slots.size() && m_Slots[SID].GetTeam() == Team)
+    return true;
+
+  EventPlayerChangeTeam(Player, Team);
+  SID = GetSIDFromPID(Player->GetPID());
+
+  if (SID < m_Slots.size() && m_Slots[SID].GetTeam() == Team)
+    return true;
+
+  why = team == 0 ? "no observer slot" : "team full or not allowed";
+  return false;
+}
+
 void CGame::EventPlayerChangeColour(CGamePlayer* player, uint8_t colour)
 {
   // player is requesting a colour change

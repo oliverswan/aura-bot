@@ -671,6 +671,7 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
                   CConfig MapCFG;
                   MapCFG.Set("map_path", R"(Maps\Download\)" + ClientFile);
                   MapCFG.Set("map_localpath", File);
+                  MapCFG.Set("map_observers", "3"); // war3plat (ADR-0012): spare slots are observer slots
 
                   if (File.find("DotA") != string::npos)
                     MapCFG.Set("map_type", "dota");
@@ -1556,6 +1557,43 @@ void CBNET::ProcessChatEvent(const CIncomingChatEvent* chatEvent)
             }
             else
               QueueChatCommand("This command is disabled while the game is locked", User, Whisper, m_IRC);
+
+            break;
+          }
+
+          //
+          // !TEAM <team> <name> (war3plat, ADR-0012: 1-based team, 0 = observers)
+          //
+
+          case HashCode("team"):
+          {
+            if (Payload.empty() || !m_Aura->m_CurrentGame)
+              break;
+
+            uint32_t     Team;
+            stringstream SS;
+            SS << Payload;
+            SS >> Team;
+            string Name;
+
+            if (!SS.fail())
+            {
+              getline(SS, Name);
+              Name.erase(0, min(Name.find_first_not_of(' '), Name.size()));
+            }
+
+            if (SS.fail() || Name.empty())
+            {
+              QueueChatCommand("Team failed []: usage !team <team> <name>", User, Whisper, m_IRC);
+              break;
+            }
+
+            string Why;
+
+            if (m_Aura->m_CurrentGame->SetPlayerTeam(Name, Team, Why))
+              QueueChatCommand("Team [" + Name + "] -> " + to_string(Team), User, Whisper, m_IRC);
+            else
+              QueueChatCommand("Team failed [" + Name + "]: " + Why, User, Whisper, m_IRC);
 
             break;
           }
